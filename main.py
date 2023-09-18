@@ -3,6 +3,7 @@ import json
 import os
 from pathlib import Path
 from subprocess import Popen
+import subprocess
 from typing import Optional
 
 from dotenv import load_dotenv
@@ -28,7 +29,10 @@ CF_PROCESS: Optional[Popen] = None
 def fully_kill_process(process: Optional[Popen]):
     if process is None: return
     for child_process in psutil.Process(process.pid).children(True):
-        child_process.kill()
+        try:
+            child_process.kill()
+        except psutil.NoSuchProcess:
+            pass
     process.kill()
 
 
@@ -59,9 +63,14 @@ def logout():
 def start_server():
     global CF_PROCESS
     if os.environ.get("RUN_CLOUDFLARED") == "yes":
-        CF_PROCESS = Popen(f"cloudflared tunnel run --url 0.0.0.0:8001 {os.environ.get("CLOUDFLARED_DOMAIN")}", shell=True, start_new_session=True)
+        cf_domain = os.environ.get("CLOUDFLARED_DOMAIN")
+        if not Path("./cf_creds.json").exists():
+            print("Retrieving cloudflare credentials...")
+            subprocess.run(f"cloudflared tunnel token --cred-file cf_creds.json {cf_domain}", shell=True)
+        CF_PROCESS = Popen(f"cloudflared tunnel run --cred-file cf_creds.json --url 0.0.0.0:8001 {cf_domain}", shell=True, start_new_session=True)
     atexit.register(lambda: fully_kill_process(CF_PROCESS))
 
+    print("Starting server...")
     serve(app, listen="0.0.0.0:8001")
 
 if __name__ == "__main__":
