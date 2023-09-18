@@ -1,14 +1,16 @@
 import atexit
 import json
 import os
+import subprocess
+from functools import wraps
 from pathlib import Path
 from subprocess import Popen
-import subprocess
-from typing import Optional
+from typing import Callable, Optional
 
-from dotenv import load_dotenv
-from flask import Flask, jsonify, redirect, render_template, request, session
 import psutil
+from dotenv import load_dotenv
+from flask import (Flask, abort, jsonify, redirect, render_template, request,
+                   session)
 from waitress import serve
 
 load_dotenv(verbose=True)
@@ -26,6 +28,15 @@ messages = json.loads(messages_file_path.read_text())
 CF_PROCESS: Optional[Popen] = None
 
 
+def auth_admin(f: Callable):
+    @wraps(f)
+    def wrapper(*args, **kwargs):
+        if not session.get("is_admin", False):
+            abort(418)
+        return f(*args, **kwargs)
+    return wrapper
+
+
 def fully_kill_process(process: Optional[Popen]):
     if process is None: return
     for child_process in psutil.Process(process.pid).children(True):
@@ -41,17 +52,29 @@ def index():
     if request.method == "GET":
         if not session.get("is_admin", False):
             return render_template("login.html")
-        else:
-            return render_template("index.html")
-    if request.form.get("username", "") == os.environ.get("USERNAME") and request.form.get("password", "") == os.environ.get("PASSWORD"):
+        return redirect("/messages")
+    if request.form.get("username", "") == os.environ.get("MAPI_USERNAME") and request.form.get("password", "") == os.environ.get("MAPI_PASSWORD"):
+        print("Admin logged in!")
         session["is_admin"] = True
     return redirect("/")
 
 
 @app.route("/submit", methods=["POST"])
 def submit():
-    print("wow")
+    message = request.form.get("message", "")
+    origin = request.form.get("origin", "")
+    if message and origin:
+        messages.append({"message": message, "origin": origin})
+        messages_file_path.write_text(json.dumps(messages))
+    else:
+        print("Invalid message received, ignored...")
     return jsonify({"success": True})
+
+
+@app.route("/messages", methods=["GET"])
+@auth_admin
+def get_messages():
+    return jsonify(messages)
 
 
 @app.route("/logout", methods=["GET"])
