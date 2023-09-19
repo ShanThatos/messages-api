@@ -6,6 +6,7 @@ from functools import wraps
 from pathlib import Path
 from subprocess import Popen
 from typing import Callable, Optional
+from flask_cors import CORS
 
 import psutil
 from dotenv import load_dotenv
@@ -17,6 +18,7 @@ load_dotenv(verbose=True)
 
 
 app = Flask(__name__)
+CORS(app)
 app.secret_key = os.environ.get("SECRET_KEY")
 app.config["TEMPLATES_AUTO_RELOAD"] = os.environ.get("TEMPLATES_AUTO_RELOAD") == "yes"
 
@@ -61,8 +63,11 @@ def index():
 
 @app.route("/submit", methods=["POST"])
 def submit():
-    message = request.form.get("message", "")
-    origin = request.form.get("origin", "")
+    if not request.is_json or request.json is None:
+        print("Invalid request received, ignored...")
+        abort(418)
+    message = request.json.get("message", "")
+    origin = request.json.get("origin", "")
     if message and origin:
         messages.append({"message": message, "origin": origin})
         messages_file_path.write_text(json.dumps(messages))
