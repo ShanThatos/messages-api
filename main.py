@@ -108,6 +108,7 @@ def delete_message(message_id: str):
     global messages
     messages = [message for message in messages if message["id"] != message_id]
     save_messages()
+    return redirect("/messages")
 
 
 @app.route("/logout", methods=["GET"])
