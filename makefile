@@ -3,4 +3,4 @@ update:
 
 start:
 	poetry install
-	poetry run python main.py
+	poetry run python -u main.py

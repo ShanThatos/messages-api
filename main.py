@@ -68,6 +68,7 @@ def submit():
         abort(418)
     message = request.json.get("message", "")
     origin = request.json.get("origin", "")
+    print(f"Received message: {repr(message)} from \"{origin}\"")
     if message and origin:
         messages.append({"message": message, "origin": origin})
         messages_file_path.write_text(json.dumps(messages))
