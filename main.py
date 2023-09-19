@@ -1,6 +1,8 @@
 import atexit
 import json
 import os
+import random
+import string
 import subprocess
 from functools import wraps
 from pathlib import Path
@@ -49,6 +51,11 @@ def fully_kill_process(process: Optional[Popen]):
     process.kill()
 
 
+def save_messages():
+    global messages
+    messages_file_path.write_text(json.dumps(messages))
+
+
 @app.route("/", methods=["GET", "POST"])
 def index():
     if request.method == "GET":
@@ -63,15 +70,17 @@ def index():
 
 @app.route("/submit", methods=["POST"])
 def submit():
+    global messages
     if not request.is_json or request.json is None:
         print("Invalid request received, ignored...")
         abort(418)
     message = request.json.get("message", "")
     origin = request.json.get("origin", "")
-    print(f"Received message: {repr(message)} from \"{origin}\"")
+    print(f"Received message: {repr(message)} from {repr(origin)}")
     if message and origin:
-        messages.append({"message": message, "origin": origin})
-        messages_file_path.write_text(json.dumps(messages))
+        message_id = "".join(random.sample(string.ascii_letters, 10))
+        messages.append({"id": message_id, "message": message, "origin": origin})
+        save_messages()
     else:
         print("Invalid message received, ignored...")
     return jsonify({"success": True})
@@ -80,7 +89,25 @@ def submit():
 @app.route("/messages", methods=["GET"])
 @auth_admin
 def get_messages():
+    global messages
     return jsonify(messages)
+
+
+@app.route("/clear", methods=["GET"])
+@auth_admin
+def clear_messages():
+    global messages
+    messages.clear()
+    save_messages()
+    return redirect("/messages")
+
+
+@app.route("/delete/<string:message_id>", methods=["GET"])
+@auth_admin
+def delete_message(message_id: str):
+    global messages
+    messages = [message for message in messages if message["id"] != message_id]
+    save_messages()
 
 
 @app.route("/logout", methods=["GET"])
